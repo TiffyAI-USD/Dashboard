@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OS Admin Panel</title>
+    <style>
+        body { font-family: sans-serif; background: #000; color: #00ff00; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #333; padding: 12px; text-align: left; }
+        th { background: #111; }
+        .status-active { color: #00ff00; }
+        .btn-view { background: #00d4ff; border: none; padding: 5px 10px; cursor: pointer; color: black; }
+    </style>
+</head>
+<body>
+    <h1>🛰️ Global Store Manager</h1>
+    <div id="stats">Loading database...</div>
+    <table id="storeTable">
+        <thead>
+            <tr>
+                <th>Store Handle</th>
+                <th>Business Name</th>
+                <th>Created At</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        async function loadAdmin() {
+            const res = await fetch('https://webstore-api-m8sr.onrender.com/api/admin/all-stores');
+            const stores = await res.json();
+            
+            document.getElementById('stats').innerText = `Total Stores: ${stores.length}`;
+            const tbody = document.querySelector('#storeTable tbody');
+            
+            tbody.innerHTML = stores.map(s => `
+                <tr>
+                    <td>${s.handle}</td>
+                    <td>${s.name || 'Unnamed'}</td>
+                    <td>${new Date(s.created_at).toLocaleDateString()}</td>
+                    <td class="status-active">${s.is_active ? 'LIVE' : 'BANNED'}</td>
+                    <td>
+                        <button class="btn-view" onclick="window.open('https://webstore-api-m8sr.onrender.com/view/${s.handle}')">Visit</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        loadAdmin();
+    </script>
+</body>
+</html>

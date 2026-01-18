@@ -5,72 +5,148 @@
     <style>
         :root { --accent: #00d4ff; --bg: #000; --text: #00ff00; --banned: #ff4444; }
         body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+        
         .broadcast-box { background: #111; padding: 20px; border: 1px solid #333; border-radius: 12px; margin-bottom: 25px; }
-        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 10px; margin-top: 10px; box-sizing: border-box; }
+        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 8px; margin-top: 10px; box-sizing: border-box; }
+        
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        #search { padding: 10px; background: #222; border: 1px solid #444; color: #fff; border-radius: 5px; width: 250px; }
+        
         table { width: 100%; border-collapse: collapse; background: #0a0a0a; }
         th, td { border: 1px solid #222; padding: 12px; text-align: left; }
-        th { background: #151515; }
-        button { cursor: pointer; font-weight: bold; border: none; padding: 6px 12px; border-radius: 4px; transition: 0.2s; }
+        th { background: #151515; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+        
+        button { cursor: pointer; font-weight: bold; border-radius: 4px; border: none; padding: 6px 12px; transition: 0.2s; }
         .btn-view { background: var(--accent); color: #000; }
         .btn-ban { background: var(--banned); color: #fff; }
-        .btn-wa { background: #25d366; color: white; margin-top: 10px; padding: 12px 24px; }
+        .btn-unban { background: #00ff00; color: #000; }
+        .btn-extend { background: #ffae00; color: #000; }
+        .btn-broadcast { background: #25d366; color: white; margin-top: 10px; font-size: 1rem; padding: 12px 24px; }
+        
         tr:hover { background: #111; }
+        .checkbox-col { width: 40px; text-align: center; }
     </style>
 </head>
 <body>
+
     <h1>🛰️ Global Store Manager</h1>
+
     <div class="broadcast-box">
-        <h3>📢 WhatsApp Broadcast</h3>
-        <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
-        <button class="btn-wa" onclick="sendBroadcast()">🚀 Send to Selected</button>
+        <h3 style="margin:0;">📢 WhatsApp Broadcast</h3>
+        <textarea id="broadcastMsg" placeholder="Type a message for selected owners..."></textarea>
+        <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
-    <div id="stats">Loading...</div>
-    <table>
+
+    <div class="controls">
+        <div id="stats">Loading database...</div>
+        <input type="text" id="search" placeholder="Search by handle or name..." onkeyup="filterTable()">
+    </div>
+
+    <table id="storeTable">
         <thead>
             <tr>
-                <th><input type="checkbox" onclick="toggleAll(this)"></th>
+                <th class="checkbox-col"><input type="checkbox" onclick="toggleAll(this)"></th>
                 <th>Store / Owner</th>
                 <th>Trial / Created</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Magic Actions</th>
             </tr>
         </thead>
         <tbody id="tableBody"></tbody>
     </table>
+
     <script>
+        let stores = [];
         const API = 'https://webstore-api-m8sr.onrender.com';
-        async function load() {
-            const res = await fetch(`${API}/api/admin/all-stores`);
-            const stores = await res.json();
-            document.getElementById('stats').innerText = `Total: ${stores.length}`;
-            document.getElementById('tableBody').innerHTML = stores.map(s => {
-                const diff = Math.ceil((new Date(s.trial_expires) - new Date()) / (1000*60*60*24));
+
+        async function loadAdmin() {
+            try {
+                const res = await fetch(`${API}/api/admin/all-stores`);
+                stores = await res.json();
+                renderTable(stores);
+            } catch (err) {
+                document.getElementById('stats').innerText = "Error connecting to server.";
+            }
+        }
+
+        function renderTable(data) {
+            document.getElementById('stats').innerText = `Total Stores: ${data.length}`;
+            const tbody = document.getElementById('tableBody');
+            
+            tbody.innerHTML = data.map(s => {
+                const now = new Date();
+                const expiry = new Date(s.trial_expires);
+                const diffTime = expiry - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const dayColor = diffDays <= 2 ? '#ff4444' : '#ffae00';
+                const dayLabel = diffDays > 0 ? `${diffDays}d left` : 'EXPIRED';
+
                 return `
                 <tr>
-                    <td><input type="checkbox" class="store-check" value="${s.owner_whatsapp}"></td>
-                    <td><b>${s.handle}</b><br><small style="color:#888">${s.name || 'Unnamed'}</small></td>
-                    <td><small style="color:${diff <= 2 ? 'red' : '#ffae00'}">${diff}d left</small><br><small style="color:#555">${new Date(s.created_at).toLocaleDateString()}</small></td>
-                    <td style="color:${s.is_active ? '#0ff' : 'red'}">${s.is_active ? 'LIVE' : 'BANNED'}</td>
+                    <td class="checkbox-col">
+                        <input type="checkbox" class="store-check" value="${s.owner_whatsapp}">
+                    </td>
+                    <td>
+                        <b style="color:var(--accent)">${s.handle}</b><br>
+                        <small style="color:#888">${s.name || 'Unnamed Store'}</small>
+                    </td>
+                    <td>
+                        <small style="color:${dayColor}; font-weight:bold;">⏳ ${dayLabel}</small><br>
+                        <small style="color:#555">${new Date(s.created_at).toLocaleDateString()}</small>
+                    </td>
+                    <td style="color: ${s.is_active ? '#00ff00' : 'var(--banned)'}">
+                        ${s.is_active ? '● LIVE' : '● BANNED'}
+                    </td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
-                        <button class="${s.is_active ? 'btn-ban' : 'btn-wa'}" onclick="action('${s.handle}','toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
-                        <button style="background:#ffae00" onclick="action('${s.handle}','extend')">+30D</button>
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
+                            ${s.is_active ? 'BAN' : 'ACTIVATE'}
+                        </button>
+                        <button class="btn-extend" onclick="adminAction('${s.handle}', 'extend')">+30D</button>
                     </td>
                 </tr>`;
             }).join('');
         }
-        function toggleAll(m) { document.querySelectorAll('.store-check').forEach(c => c.checked = m.checked); }
+
+        function filterTable() {
+            const term = document.getElementById('search').value.toLowerCase();
+            const filtered = stores.filter(s => 
+                s.handle.toLowerCase().includes(term) || 
+                (s.name && s.name.toLowerCase().includes(term))
+            );
+            renderTable(filtered);
+        }
+
+        function toggleAll(master) {
+            document.querySelectorAll('.store-check').forEach(cb => cb.checked = master.checked);
+        }
+
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
-            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(c => c.value).filter(v => v && v !== 'null');
-            if(!msg || selected.length === 0) return alert("Select stores & type message!");
-            selected.forEach((n, i) => { setTimeout(() => window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`, '_blank'), i * 800); });
+            if(!msg) return alert("Type a message first!");
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(cb => cb.value)
+                                 .filter(num => num && num !== 'null' && num !== 'undefined');
+            if(selected.length === 0) return alert("No stores selected or no WhatsApp numbers found.");
+
+            selected.forEach((num, i) => {
+                setTimeout(() => {
+                    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+                }, i * 800); 
+            });
         }
-        async function action(handle, action) {
-            await fetch(`${API}/api/admin/action`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({handle, action}) });
-            load();
+
+        async function adminAction(handle, action) {
+            if(!confirm(`Are you sure you want to ${action} ${handle}?`)) return;
+            await fetch(`${API}/api/admin/action`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ handle, action })
+            });
+            loadAdmin(); 
         }
-        load();
+
+        loadAdmin();
     </script>
 </body>
 </html>

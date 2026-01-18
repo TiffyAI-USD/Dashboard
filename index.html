@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OS Admin Panel | Global Store Manager</title>
+    <style>
+        :root { 
+            --accent: #00d4ff; 
+            --bg: #000; 
+            --card: #111;
+            --text: #00ff00; 
+            --banned: #ff4444; 
+            --pro: #ffd700;
+        }
+
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: #fff; 
+            padding: 30px; 
+            margin: 0;
+        }
+
+        h1 { color: var(--accent); margin-bottom: 30px; }
+
+        /* Broadcast Box */
+        .broadcast-box { 
+            background: var(--card); 
+            padding: 25px; 
+            border: 1px solid #333; 
+            border-radius: 16px; 
+            margin-bottom: 30px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        textarea { 
+            width: 100%; 
+            height: 100px; 
+            background: #222; 
+            color: #fff; 
+            border: 1px solid #444; 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin-top: 15px; 
+            box-sizing: border-box; 
+            font-size: 1rem;
+            resize: vertical;
+        }
+
+        /* Controls & Stats */
+        .controls { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 20px; 
+        }
+
+        #search { 
+            padding: 12px 20px; 
+            background: #1a1a1a; 
+            border: 1px solid #333; 
+            color: #fff; 
+            border-radius: 8px; 
+            width: 300px; 
+            outline: none;
+        }
+        #search:focus { border-color: var(--accent); }
+
+        #stats { font-weight: bold; color: var(--accent); font-size: 1.1rem; }
+
+        /* Table Design */
+        table { 
+            width: 100%; 
+            border-collapse: separate; 
+            border-spacing: 0;
+            background: #0a0a0a; 
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #222;
+        }
+
+        th, td { 
+            padding: 18px; 
+            text-align: left; 
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        th { 
+            background: #151515; 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            letter-spacing: 1.5px; 
+            color: #888;
+        }
+
+        tr:hover { background: #0f0f0f; }
+
+        /* Badges */
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 900;
+            display: inline-block;
+            margin-bottom: 5px;
+        }
+        .badge-trial { background: #333; color: #aaa; border: 1px solid #444; }
+        .badge-pro { background: var(--pro); color: #000; }
+
+        /* Buttons */
+        button { 
+            cursor: pointer; 
+            font-weight: 800; 
+            border-radius: 6px; 
+            border: none; 
+            padding: 8px 16px; 
+            transition: 0.3s; 
+            font-size: 0.8rem;
+        }
+        .btn-view { background: var(--accent); color: #000; margin-right: 5px; }
+        .btn-ban { background: var(--banned); color: #fff; }
+        .btn-unban { background: #00ff00; color: #000; }
+        .btn-extend { background: #ffae00; color: #000; margin-left: 5px; }
+        .btn-broadcast { 
+            background: #25d366; 
+            color: white; 
+            margin-top: 15px; 
+            font-size: 1rem; 
+            padding: 12px 30px; 
+            border-radius: 50px;
+        }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+
+        .checkbox-col { width: 50px; text-align: center; }
+        input[type="checkbox"] { transform: scale(1.3); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h1>🛰️ Global Store Manager</h1>
+
+    <div class="broadcast-box">
+        <h3 style="margin:0;">📢 WhatsApp Broadcast</h3>
+        <textarea id="broadcastMsg" placeholder="Type a message for selected owners (e.g. Trial Expiration Warning or Promo Rewards)..."></textarea>
+        <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
+    </div>
+
+    <div class="controls">
+        <div id="stats">Syncing with satellite...</div>
+        <input type="text" id="search" placeholder="Search handles or names..." onkeyup="filterTable()">
+    </div>
+
+    <table id="storeTable">
+        <thead>
+            <tr>
+                <th class="checkbox-col"><input type="checkbox" onclick="toggleAll(this)"></th>
+                <th>Store Details</th>
+                <th>Plan & Expiry</th>
+                <th>Status</th>
+                <th>Control Panel</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        let stores = [];
+        const API = 'https://webstore-api-m8sr.onrender.com';
+
+        async function loadAdmin() {
+            try {
+                const res = await fetch(`${API}/api/admin/all-stores`);
+                stores = await res.json();
+                renderTable(stores);
+            } catch (err) {
+                document.getElementById('stats').innerText = "❌ Connection Error";
+            }
+        }
+
+        function renderTable(data) {
+            document.getElementById('stats').innerText = `Total Nodes: ${data.length}`;
+            const tbody = document.getElementById('tableBody');
+            
+            tbody.innerHTML = data.map(s => {
+                const now = new Date();
+                const expiry = new Date(s.trial_expires);
+                const diffTime = expiry - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                const isPro = s.plan_type === 'pro';
+                const planBadge = isPro 
+                    ? '<span class="badge badge-pro">👑 PRO MEMBER</span>' 
+                    : '<span class="badge badge-trial">🧪 7-DAY TRIAL</span>';
+
+                // Expiry Logic
+                let expiryDisplay;
+                let expiryColor = "#fff";
+
+                if (isPro) {
+                    expiryDisplay = "Unlimited Access";
+                    expiryColor = "var(--pro)";
+                } else if (diffDays <= 0) {
+                    expiryDisplay = "EXPIRED";
+                    expiryColor = "var(--banned)";
+                } else {
+                    expiryDisplay = `${diffDays} days remaining`;
+                    expiryColor = diffDays <= 2 ? 'var(--banned)' : '#ffae00';
+                }
+
+                return `
+                <tr>
+                    <td class="checkbox-col">
+                        <input type="checkbox" class="store-check" value="${s.owner_whatsapp}">
+                    </td>
+                    <td>
+                        ${planBadge}<br>
+                        <b style="color:var(--accent); font-size:1.1rem;">${s.handle}</b><br>
+                        <small style="color:#666">${s.name || 'Unnamed Store'}</small>
+                    </td>
+                    <td>
+                        <span style="color:${expiryColor}; font-weight:bold;">${expiryDisplay}</span><br>
+                        <small style="color:#444">Created: ${new Date(s.created_at).toLocaleDateString()}</small>
+                    </td>
+                    <td style="color: ${s.is_active ? '#00ff00' : 'var(--banned)'}; font-weight:bold;">
+                        ${s.is_active ? '● ACTIVE' : '● SUSPENDED'}
+                    </td>
+                    <td>
+                        <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
+                        
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
+                            ${s.is_active ? 'BAN' : 'ACTIVATE'}
+                        </button>
+
+                        <button class="btn-extend" onclick="adminAction('${s.handle}', 'extend')" title="Add 30 Days">+30D</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterTable() {
+            const term = document.getElementById('search').value.toLowerCase();
+            const filtered = stores.filter(s => 
+                s.handle.toLowerCase().includes(term) || 
+                (s.name && s.name.toLowerCase().includes(term))
+            );
+            renderTable(filtered);
+        }
+
+        function toggleAll(master) {
+            document.querySelectorAll('.store-check').forEach(cb => cb.checked = master.checked);
+        }
+
+        function sendBroadcast() {
+            const msg = document.getElementById('broadcastMsg').value;
+            if(!msg) return alert("Please enter a message!");
+            
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(cb => cb.value)
+                                 .filter(num => num && num !== 'null' && num !== 'undefined');
+
+            if(selected.length === 0) return alert("No owners selected.");
+
+            selected.forEach((num, i) => {
+                setTimeout(() => {
+                    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+                }, i * 1000); 
+            });
+        }
+
+        async function adminAction(handle, action) {
+            const confirmMsg = action === 'extend' ? `Add 30 days to ${handle}?` : `Change status for ${handle}?`;
+            if(!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch(`${API}/api/admin/action`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ handle, action })
+                });
+                if(res.ok) loadAdmin();
+            } catch (err) {
+                alert("Action failed. Check server connection.");
+            }
+        }
+
+        loadAdmin();
+    </script>
+</body>
+</html>

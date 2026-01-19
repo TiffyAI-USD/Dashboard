@@ -83,18 +83,19 @@
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
                 
-                // FIXED LOGIC: Checks both column and the synced data
+                // FIXED: Checks configData, config_data, and direct is_activated column
                 const isPro = s.plan_type === 'pro' || 
                               s.plan_type === 'paid' || 
                               s.is_activated === true || 
-                              (s.configData && s.configData.isActivated === true);
+                              (s.configData && s.configData.isActivated === true) ||
+                              (s.config_data && s.config_data.isActivated === true);
 
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
 
-                // FIXED WHATSAPP: Pull from main column or configData
-                const wa = s.owner_whatsapp || (s.configData && s.configData.wa) || '';
+                // FIXED: Tries every path to get the WhatsApp number for the checkbox
+                const wa = s.owner_whatsapp || (s.configData && s.configData.wa) || (s.config_data && s.config_data.wa) || '';
 
                 let membershipHTML = isPro ? 
                     `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>` :
@@ -105,7 +106,7 @@
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || (s.configData && s.configData.businessName) || 'Unnamed Store'}</small><br>
+                        <small style="color:#888">${s.name || (s.configData && s.configData.businessName) || (s.config_data && s.config_data.businessName) || 'Unnamed Store'}</small><br>
                         <small style="color:#555">WA: ${wa || 'No Number'}</small>
                     </td>
                     <td>${membershipHTML}</td>

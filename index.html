@@ -21,7 +21,7 @@
         th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; letter-spacing: 1px; }
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; margin-bottom: 5px; }
         .badge-pro { background: var(--pro); color: #000; }
-        .badge-trial { background: #444; color: #fff; }
+        .badge-banned { background: var(--banned); color: #fff; }
         button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; text-transform: uppercase; }
         .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
         .btn-ban { background: var(--banned); color: #fff; }
@@ -37,13 +37,13 @@
 
     <div class="broadcast-box">
         <h3 style="margin:0;">📢 WhatsApp Broadcast to Store Owners</h3>
-        <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
+        <textarea id="broadcastMsg" placeholder="Type message (e.g. New update available! Check your dashboard...)"></textarea>
         <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
 
     <div class="controls">
-        <div id="stats">Connecting...</div>
-        <input type="text" id="search" placeholder="Search..." onkeyup="filterTable()">
+        <div id="stats">Connecting to Render Satellite...</div>
+        <input type="text" id="search" placeholder="Search handles or business names..." onkeyup="filterTable()">
     </div>
 
     <table id="storeTable">
@@ -70,37 +70,62 @@
                 stores = await res.json();
                 renderTable(stores);
             } catch (err) {
-                document.getElementById('stats').innerText = "❌ Offline";
+                document.getElementById('stats').innerText = "❌ Satellite Offline";
             }
         }
 
         function renderTable(data) {
-            document.getElementById('stats').innerText = `Nodes: ${data.length}`;
+            document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
             
             tbody.innerHTML = data.map(s => {
                 const createdDate = new Date(s.created_at);
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
+                
                 const isPro = s.plan_type === 'pro' || s.plan_type === 'paid';
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
 
-                let membershipHTML = isPro ? 
-                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Unlimited</small>` : 
-                    `<span class="badge badge-trial">⌛ TRIAL</span><br><small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">${isExpired ? 'EXPIRED' : diffDays + ' Days Left'}</small>`;
+                let membershipHTML = "";
+                if (isPro) {
+                    membershipHTML = `
+                        <span class="badge badge-pro">👑 PRO LICENSE</span><br>
+                        <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>`;
+                } else {
+                    membershipHTML = `
+                        <span class="badge" style="background:#444; color:#fff;">⌛ TRIAL MODE</span><br>
+                        <small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">
+                            ${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}
+                        </small>`;
+                }
                 
                 return `
                 <tr>
                     <td><input type="checkbox" class="store-check" value="${s.owner_whatsapp}"></td>
-                    <td><b class="handle-name">${s.handle}</b><br><small style="color:#888">${s.name || 'Unnamed'}</small><br><small style="color:#555">WA: ${s.owner_whatsapp || 'N/A'}</small></td>
-                    <td>${membershipHTML}</td>
-                    <td><span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">${s.is_active ? '● ONLINE' : '● SUSPENDED'}</span></td>
-                    <td><div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div></td>
+                    <td>
+                        <b class="handle-name">${s.handle}</b><br>
+                        <small style="color:#888">${s.name || 'Unnamed Store'}</small><br>
+                        <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
+                    </td>
+                    <td>
+                        ${membershipHTML}
+                    </td>
+                    <td>
+                        <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
+                            ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div>
+                        <div style="font-size:0.75rem; color:#666;">${createdDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    </td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
-                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
+                            ${s.is_active ? 'BAN' : 'ACTIVATE'}
+                        </button>
                         ${!isPro ? `<button class="btn-extend" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
                     </td>
                 </tr>`;
@@ -109,7 +134,11 @@
 
         function filterTable() {
             const term = document.getElementById('search').value.toLowerCase();
-            const filtered = stores.filter(s => s.handle.toLowerCase().includes(term) || (s.name && s.name.toLowerCase().includes(term)));
+            const filtered = stores.filter(s => 
+                s.handle.toLowerCase().includes(term) || 
+                (s.name && s.name.toLowerCase().includes(term)) ||
+                (s.owner_whatsapp && s.owner_whatsapp.includes(term))
+            );
             renderTable(filtered);
         }
 
@@ -118,33 +147,32 @@
         }
 
         async function adminAction(handle, action) {
-            if(!confirm(`Confirm ${action}?`)) return;
-            await fetch(`${API}/api/admin/action`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ handle, action })
-            });
-            loadAdmin();
+            if(!confirm(`Proceed with ${action} for ${handle}?`)) return;
+
+            try {
+                const res = await fetch(`${API}/api/admin/action`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ handle, action })
+                });
+                if(res.ok) loadAdmin();
+            } catch (err) { alert("Action failed."); }
         }
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
             if(!msg) return alert("Message is empty!");
-            
-            // Get all checked boxes and filter out empty numbers
             const selected = Array.from(document.querySelectorAll('.store-check:checked'))
-                                 .map(cb => cb.value)
-                                 .filter(num => num && num !== 'null' && num !== 'undefined' && num.trim() !== "");
+                .map(cb => cb.value)
+                .filter(num => num && num !== 'null' && num !== 'undefined' && num.trim() !== "");
             
-            if(selected.length === 0) return alert("No valid numbers selected!");
+            if(selected.length === 0) return alert("No valid stores selected!");
 
             selected.forEach((num, i) => {
-                // Remove any '+' or spaces to ensure clean WhatsApp link
                 const cleanNum = num.replace(/\D/g, ''); 
                 setTimeout(() => {
-                    const url = `https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`;
-                    window.open(url, '_blank');
-                }, i * 1500); 
+                    window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
+                }, i * 1500);
             });
         }
 

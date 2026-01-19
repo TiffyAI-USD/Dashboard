@@ -42,8 +42,8 @@
     </div>
 
     <div class="controls">
-        <div id="stats">Connecting to Render Satellite...</div>
-        <input type="text" id="search" placeholder="Search..." onkeyup="filterTable()">
+        <div id="stats">Checking Nodes...</div>
+        <input type="text" id="search" placeholder="Search handles..." onkeyup="filterTable()">
     </div>
 
     <table id="storeTable">
@@ -79,17 +79,20 @@
             const tbody = document.getElementById('tableBody');
             
             tbody.innerHTML = data.map(s => {
-                // THE REAL LOGIC: Check configData and is_activated flag exactly as Editor sends it
                 const config = s.configData || s.config_data || {};
-                const isPro = s.plan_type === 'pro' || s.is_activated === true || config.isActivated === true;
                 
+                // 1. LOGIC: Is it PAID? (Checks Editor flag and Plan column)
+                const isPro = s.plan_type === 'pro' || s.is_activated === true || config.isActivated === true;
+
+                // 2. BROADCAST NUMBERS: Pull from every possible property
                 const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || '';
+                
                 const createdDate = new Date(s.created_at);
                 const expiryDate = new Date(s.trial_expires);
                 const diffDays = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
 
                 let membershipHTML = isPro ? 
-                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">PAID</small>` :
+                    `<span class="badge badge-pro">👑 PAID LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">UNLIMITED</small>` :
                     `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small style="color:${diffDays <= 0 ? 'red' : '#aaa'}; font-weight:bold;">${diffDays <= 0 ? 'EXPIRED' : diffDays + ' Days Left'}</small>`;
                 
                 return `
@@ -98,7 +101,7 @@
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
                         <small style="color:#888">${s.name || config.businessName || 'Unnamed'}</small><br>
-                        <small style="color:#ffd700">WA: ${wa || 'MISSING'}</small>
+                        <small style="color:#ffd700">WA: ${wa || 'NOT FOUND'}</small>
                     </td>
                     <td>${membershipHTML}</td>
                     <td><span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">● ${s.is_active ? 'ONLINE' : 'BANNED'}</span></td>
@@ -122,7 +125,7 @@
         }
 
         async function adminAction(handle, action) {
-            if(!confirm(`Confirm ${action}?`)) return;
+            if(!confirm(`Proceed with ${action}?`)) return;
             await fetch(`${API}/api/admin/action`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -133,9 +136,12 @@
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
-            if(!msg) return alert("Empty message");
-            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(cb => cb.value).filter(n => n.length > 5);
-            if(!selected.length) return alert("No numbers!");
+            if(!msg) return alert("Message is empty!");
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(cb => cb.value)
+                                 .filter(n => n && n.length > 5);
+            
+            if(!selected.length) return alert("No valid phone numbers found to broadcast to.");
 
             selected.forEach((num, i) => {
                 setTimeout(() => {

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OS Admin Panel | Global Store Manager</title>
+    <style>
+        :root { 
+            --accent: #d4a373; --bg: #000; --card: #111;
+            --text: #00ff00; --banned: #ff4444; --pro: #ffd700;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; padding: 30px; margin: 0; }
+        h1 { color: var(--accent); margin-bottom: 30px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+        .broadcast-box { background: var(--card); padding: 25px; border: 1px solid #333; border-radius: 16px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 15px; border-radius: 10px; margin-top: 15px; box-sizing: border-box; font-family: inherit; }
+        .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        #search { padding: 12px 20px; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 8px; width: 300px; }
+        #stats { font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; background: #0a0a0a; border-radius: 12px; overflow: hidden; border: 1px solid #222; }
+        th, td { padding: 18px; text-align: left; border-bottom: 1px solid #1a1a1a; }
+        th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; letter-spacing: 1px; }
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; margin-bottom: 5px; }
+        .badge-pro { background: var(--pro); color: #000; }
+        .badge-banned { background: var(--banned); color: #fff; }
+        button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; text-transform: uppercase; }
+        .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
+        .btn-ban { background: var(--banned); color: #fff; }
+        .btn-unban { background: #25d366; color: #000; }
+        .btn-extend { background: var(--pro); color: #000; margin-left: 5px; }
+        .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3); }
+        .handle-name { color: var(--accent); font-size: 1.1rem; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+    <h1>🛰️ Global Store Manager</h1>
+
+    <div class="broadcast-box">
+        <h3 style="margin:0;">📢 WhatsApp Broadcast to Store Owners</h3>
+        <textarea id="broadcastMsg" placeholder="Type message (e.g. New update available! Check your dashboard...)"></textarea>
+        <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
+    </div>
+
+    <div class="controls">
+        <div id="stats">Connecting to Render Satellite...</div>
+        <input type="text" id="search" placeholder="Search handles or business names..." onkeyup="filterTable()">
+    </div>
+
+    <table id="storeTable">
+        <thead>
+            <tr>
+                <th style="width:50px;"><input type="checkbox" onclick="toggleAll(this)"></th>
+                <th>Store & Owner</th>
+                <th>Membership</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        let stores = [];
+        const API = 'https://webstore-api-m8sr.onrender.com';
+
+        async function loadAdmin() {
+            try {
+                const res = await fetch(`${API}/api/admin/all-stores`);
+                stores = await res.json();
+                renderTable(stores);
+            } catch (err) {
+                document.getElementById('stats').innerText = "❌ Satellite Offline";
+            }
+        }
+
+        function renderTable(data) {
+            document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
+            const tbody = document.getElementById('tableBody');
+            
+            tbody.innerHTML = data.map(s => {
+                const createdDate = new Date(s.created_at);
+                
+                // If plan is 'pro' or was created via new server, it's Unlimited.
+                const isPro = s.plan_type === 'pro' || s.plan_type === 'paid';
+                
+                return `
+                <tr>
+                    <td><input type="checkbox" class="store-check" value="${s.owner_whatsapp}"></td>
+                    <td>
+                        <b class="handle-name">${s.handle}</b><br>
+                        <small style="color:#888">${s.name || 'Unnamed Store'}</small><br>
+                        <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-pro">👑 PRO LICENSE</span><br>
+                        <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>
+                    </td>
+                    <td>
+                        <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
+                            ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div>
+                        <div style="font-size:0.75rem; color:#666;">${createdDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    </td>
+                    <td>
+                        <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
+                            ${s.is_active ? 'BAN' : 'ACTIVATE'}
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterTable() {
+            const term = document.getElementById('search').value.toLowerCase();
+            const filtered = stores.filter(s => 
+                s.handle.toLowerCase().includes(term) || 
+                (s.name && s.name.toLowerCase().includes(term)) ||
+                (s.owner_whatsapp && s.owner_whatsapp.includes(term))
+            );
+            renderTable(filtered);
+        }
+
+        function toggleAll(master) {
+            document.querySelectorAll('.store-check').forEach(cb => cb.checked = master.checked);
+        }
+
+        async function adminAction(handle, action) {
+            if(!confirm(`Proceed with ${action} for ${handle}?`)) return;
+
+            try {
+                const res = await fetch(`${API}/api/admin/action`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ handle, action })
+                });
+                if(res.ok) loadAdmin();
+            } catch (err) { alert("Action failed."); }
+        }
+
+        function sendBroadcast() {
+            const msg = document.getElementById('broadcastMsg').value;
+            if(!msg) return alert("Message is empty!");
+            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(cb => cb.value);
+            if(selected.length === 0) return alert("No stores selected!");
+
+            selected.forEach((num, i) => {
+                if(num && num !== 'null' && num !== 'undefined') {
+                    // Staggered opening to prevent browser blocking popups
+                    setTimeout(() => window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank'), i * 1500);
+                }
+            });
+        }
+
+        loadAdmin();
+    </script>
+</body>
+</html>

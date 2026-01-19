@@ -41,7 +41,7 @@
     </div>
 
     <div class="controls">
-        <div id="stats">Connecting...</div>
+        <div id="stats">Connecting to Render Satellite...</div>
         <input type="text" id="search" placeholder="Search..." onkeyup="filterTable()">
     </div>
 
@@ -79,24 +79,19 @@
             
             tbody.innerHTML = data.map(s => {
                 const config = s.configData || s.config_data || {};
-                const createdDate = new Date(s.created_at);
-                const expiryDate = new Date(s.trial_expires);
-                const now = new Date();
                 
-                // THE ACTIVATION LOGIC: Check database columns AND the synced config from Editor
-                const isPro = (s.plan_type === 'pro') || 
-                              (s.is_activated === true) || 
-                              (config.isActivated === true);
+                // USE EDITOR LOGIC: If isActivated was true in the Editor, it's PRO here.
+                const isPro = s.plan_type === 'pro' || s.is_activated === true || config.isActivated === true;
 
-                const diffTime = expiryDate - now;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const expiryDate = new Date(s.trial_expires);
+                const diffDays = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
 
-                // DATA READING FIX: Ensure the phone number is actually found for broadcast
-                const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || '';
+                // WHATSAPP EXTRACTION: Ensure the number is read for the broadcast checkbox
+                const wa = s.owner_whatsapp || config.wa || '';
 
                 let membershipHTML = isPro ? 
-                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Paid / Unlimited</small>` :
+                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Paid Store</small>` :
                     `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}</small>`;
                 
                 return `
@@ -104,12 +99,12 @@
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || config.businessName || 'Unnamed'}</small><br>
-                        <small style="color:#ffd700">WA: ${wa || 'NO NUMBER'}</small>
+                        <small style="color:#888">${s.name || config.businessName || 'Unnamed Store'}</small><br>
+                        <small style="color:#555">WA: ${wa || 'No Number'}</small>
                     </td>
                     <td>${membershipHTML}</td>
                     <td><span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">${s.is_active ? '● ONLINE' : '● BANNED'}</span></td>
-                    <td><div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div></td>
+                    <td><div style="font-size:0.85rem;">${new Date(s.created_at).toLocaleDateString()}</div></td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
                         <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
@@ -143,11 +138,12 @@
             const selected = Array.from(document.querySelectorAll('.store-check:checked'))
                                  .map(cb => cb.value)
                                  .filter(n => n && n.length > 5);
-            if(selected.length === 0) return alert("No valid store numbers found!");
+            if(selected.length === 0) return alert("No valid store numbers selected!");
 
             selected.forEach((num, i) => {
+                const cleanNum = num.replace(/\D/g, ''); 
                 setTimeout(() => {
-                    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                    window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
                 }, i * 2000); 
             });
         }

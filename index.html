@@ -37,13 +37,13 @@
 
     <div class="broadcast-box">
         <h3 style="margin:0;">📢 WhatsApp Broadcast to Store Owners</h3>
-        <textarea id="broadcastMsg" placeholder="Type message (e.g. New update available! Check your dashboard...)"></textarea>
+        <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
         <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
 
     <div class="controls">
-        <div id="stats">Connecting to Render Satellite...</div>
-        <input type="text" id="search" placeholder="Search handles or business names..." onkeyup="filterTable()">
+        <div id="stats">Connecting...</div>
+        <input type="text" id="search" placeholder="Search..." onkeyup="filterTable()">
     </div>
 
     <table id="storeTable">
@@ -74,7 +74,7 @@
             }
         }
 
-                function renderTable(data) {
+        function renderTable(data) {
             document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
             
@@ -83,36 +83,30 @@
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
                 
-                // SURGICAL FIX: Check plan_type OR the is_activated flag in configData
+                // FIXED LOGIC: Checks both column and the synced data
                 const isPro = s.plan_type === 'pro' || 
                               s.plan_type === 'paid' || 
                               s.is_activated === true || 
-                              (s.config_data && s.config_data.isActivated === true);
+                              (s.configData && s.configData.isActivated === true);
 
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
 
-                let membershipHTML = "";
-                if (isPro) {
-                    membershipHTML = `
-                        <span class="badge badge-pro">👑 PRO LICENSE</span><br>
-                        <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>`;
-                } else {
-                    membershipHTML = `
-                        <span class="badge badge-trial">⌛ TRIAL MODE</span><br>
-                        <small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">
-                            ${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}
-                        </small>`;
-                }
+                // FIXED WHATSAPP: Pull from main column or configData
+                const wa = s.owner_whatsapp || (s.configData && s.configData.wa) || '';
+
+                let membershipHTML = isPro ? 
+                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>` :
+                    `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}</small>`;
                 
                 return `
                 <tr>
-                    <td><input type="checkbox" class="store-check" value="${s.owner_whatsapp}"></td>
+                    <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || (s.config_data && s.config_data.businessName) || 'Unnamed Store'}</small><br>
-                        <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
+                        <small style="color:#888">${s.name || (s.configData && s.configData.businessName) || 'Unnamed Store'}</small><br>
+                        <small style="color:#555">WA: ${wa || 'No Number'}</small>
                     </td>
                     <td>${membershipHTML}</td>
                     <td>
@@ -120,15 +114,10 @@
                             ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
                         </span>
                     </td>
-                    <td>
-                        <div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div>
-                    </td>
+                    <td><div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div></td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
-                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
-                            ${s.is_active ? 'BAN' : 'ACTIVATE'}
-                        </button>
-                        ${!isPro ? `<button class="btn-extend" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -136,10 +125,7 @@
 
         function filterTable() {
             const term = document.getElementById('search').value.toLowerCase();
-            const filtered = stores.filter(s => 
-                s.handle.toLowerCase().includes(term) || 
-                (s.name && s.name.toLowerCase().includes(term))
-            );
+            const filtered = stores.filter(s => s.handle.toLowerCase().includes(term));
             renderTable(filtered);
         }
 
@@ -150,31 +136,24 @@
         async function adminAction(handle, action) {
             if(!confirm(`Proceed with ${action}?`)) return;
             try {
-                const res = await fetch(`${API}/api/admin/action`, {
+                await fetch(`${API}/api/admin/action`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ handle, action })
                 });
-                if(res.ok) loadAdmin();
+                loadAdmin();
             } catch (err) { alert("Action failed."); }
         }
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
             if(!msg) return alert("Message is empty!");
-            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
-                                 .map(cb => cb.value)
-                                 .filter(n => n && n !== 'null' && n !== 'undefined');
+            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(cb => cb.value).filter(n => n && n.length > 5);
             if(selected.length === 0) return alert("No valid stores selected!");
-
             selected.forEach((num, i) => {
-                const cleanNum = num.replace(/\D/g, ''); 
-                setTimeout(() => {
-                    window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
-                }, i * 2000); 
+                setTimeout(() => { window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }, i * 2000);
             });
         }
-
         loadAdmin();
     </script>
 </body>

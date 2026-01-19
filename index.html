@@ -6,7 +6,7 @@
     <style>
         :root { --accent: #d4a373; --bg: #000; --card: #111; --pro: #ffd700; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; padding: 30px; margin: 0; }
-        h1 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
+        h1 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; font-weight: 800; }
         .broadcast-box { background: var(--card); padding: 25px; border: 1px solid #333; border-radius: 16px; margin-bottom: 30px; border: 1px solid #333; }
         textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 15px; border-radius: 10px; margin-top: 15px; box-sizing: border-box; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; background: #0a0a0a; border-radius: 12px; overflow: hidden; border: 1px solid #222; }
@@ -15,16 +15,20 @@
         .badge-pro { background: var(--pro); color: #000; padding: 4px 10px; border-radius: 6px; font-weight: 900; }
         .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; cursor: pointer; font-weight: bold; border: none; }
         button { cursor: pointer; border-radius: 6px; border: none; padding: 8px 16px; font-weight: 800; margin-right: 5px; }
+        .wa-number { color: #ffd700; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>🛰️ Global Store Manager</h1>
+    
     <div class="broadcast-box">
         <h3>📢 WhatsApp Broadcast</h3>
-        <textarea id="broadcastMsg" placeholder="Type your update message here..."></textarea>
+        <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
         <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
-    <div id="stats" style="color:var(--accent); margin-bottom: 15px; font-weight: bold;">Syncing Nodes...</div>
+
+    <div id="stats" style="color:var(--accent); margin-bottom: 15px; font-weight: bold;">Syncing with Satellite...</div>
+
     <table id="storeTable">
         <thead>
             <tr>
@@ -47,21 +51,23 @@
                 const res = await fetch(`${API}/api/admin/all-stores`);
                 stores = await res.json();
                 renderTable(stores);
-            } catch (err) { document.getElementById('stats').innerText = "❌ Satellite Offline"; }
+            } catch (err) { document.getElementById('stats').innerText = "❌ Offline"; }
         }
 
         function renderTable(data) {
             document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
+            
             tbody.innerHTML = data.map(s => {
-                // FIXED DATA EXTRACTION
+                // THE LOGIC YOU TOLD ME TO USE:
+                // Dig into the configData where the Editor stores its state
                 const config = s.configData || s.config_data || {};
                 
-                // WA FIX: Checks every possible place the number is stored
-                const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || "";
+                // 1. IS IT PAID? (Using your existing activation logic flag)
+                const isPaid = (s.plan_type === 'pro') || (s.is_activated === true) || (config.isActivated === true);
                 
-                // LICENSE LOGIC: Checks both the DB column and the Editor's synced flag
-                const isPaid = s.plan_type === 'pro' || s.is_activated === true || config.isActivated === true;
+                // 2. WHATSAPP? (Reading the number your editor has always used)
+                const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || "";
 
                 const expiry = new Date(s.trial_expires);
                 const diff = Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24));
@@ -70,8 +76,8 @@
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
                         <b style="color:var(--accent); font-size: 1.1rem;">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || config.businessName || 'Unnamed Store'}</small><br>
-                        <small style="color:#ffd700; font-weight: bold;">WA: ${wa || 'NOT FOUND'}</small>
+                        <small style="color:#888">${s.name || config.businessName || 'Unnamed'}</small><br>
+                        <span class="wa-number">WA: ${wa || 'NOT FOUND'}</span>
                     </td>
                     <td>
                         ${isPaid ? '<span class="badge-pro">👑 PAID LICENSE</span>' : `<span style="color:#aaa">⌛ TRIAL: ${diff} Days</span>`}
@@ -79,7 +85,7 @@
                     <td><b style="color:${s.is_active ? '#00ff00' : '#ff4444'}">${s.is_active ? '● ONLINE' : '● BANNED'}</b></td>
                     <td>
                         <button style="background:#3498db; color:#fff" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
-                        <button style="background:#444; color:#fff" onclick="adminAction('${s.handle}', 'toggle')">BAN/ACTIVATE</button>
+                        <button style="background:#444; color:#fff" onclick="adminAction('${s.handle}', 'toggle')">BAN</button>
                         ${!isPaid ? `<button style="background:#8e44ad; color:#fff" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
                     </td>
                 </tr>`;
@@ -104,7 +110,7 @@
                                  .map(c => c.value)
                                  .filter(v => v && v.length > 5);
             
-            if(!msg || !selected.length) return alert("Select stores with valid numbers first.");
+            if(!msg || !selected.length) return alert("Select stores with valid numbers.");
 
             selected.forEach((num, i) => {
                 const clean = num.replace(/\D/g, '');

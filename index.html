@@ -21,7 +21,7 @@
         th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; letter-spacing: 1px; }
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; margin-bottom: 5px; }
         .badge-pro { background: var(--pro); color: #000; }
-        .badge-banned { background: var(--banned); color: #fff; }
+        .badge-trial { background: #444; color: #fff; }
         button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; text-transform: uppercase; }
         .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
         .btn-ban { background: var(--banned); color: #fff; }
@@ -83,6 +83,7 @@
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
                 
+                // Membership logic: Check if plan is 'pro' (7-digit code result)
                 const isPro = s.plan_type === 'pro' || s.plan_type === 'paid';
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -95,7 +96,7 @@
                         <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>`;
                 } else {
                     membershipHTML = `
-                        <span class="badge" style="background:#444; color:#fff;">⌛ TRIAL MODE</span><br>
+                        <span class="badge badge-trial">⌛ TRIAL MODE</span><br>
                         <small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">
                             ${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}
                         </small>`;
@@ -109,9 +110,7 @@
                         <small style="color:#888">${s.name || 'Unnamed Store'}</small><br>
                         <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
                     </td>
-                    <td>
-                        ${membershipHTML}
-                    </td>
+                    <td>${membershipHTML}</td>
                     <td>
                         <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
                             ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
@@ -119,7 +118,6 @@
                     </td>
                     <td>
                         <div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div>
-                        <div style="font-size:0.75rem; color:#666;">${createdDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                     </td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
@@ -136,8 +134,7 @@
             const term = document.getElementById('search').value.toLowerCase();
             const filtered = stores.filter(s => 
                 s.handle.toLowerCase().includes(term) || 
-                (s.name && s.name.toLowerCase().includes(term)) ||
-                (s.owner_whatsapp && s.owner_whatsapp.includes(term))
+                (s.name && s.name.toLowerCase().includes(term))
             );
             renderTable(filtered);
         }
@@ -147,8 +144,7 @@
         }
 
         async function adminAction(handle, action) {
-            if(!confirm(`Proceed with ${action} for ${handle}?`)) return;
-
+            if(!confirm(`Proceed with ${action}?`)) return;
             try {
                 const res = await fetch(`${API}/api/admin/action`, {
                     method: 'POST',
@@ -163,16 +159,15 @@
             const msg = document.getElementById('broadcastMsg').value;
             if(!msg) return alert("Message is empty!");
             const selected = Array.from(document.querySelectorAll('.store-check:checked'))
-                .map(cb => cb.value)
-                .filter(num => num && num !== 'null' && num !== 'undefined' && num.trim() !== "");
-            
+                                 .map(cb => cb.value)
+                                 .filter(n => n && n !== 'null' && n !== 'undefined');
             if(selected.length === 0) return alert("No valid stores selected!");
 
             selected.forEach((num, i) => {
                 const cleanNum = num.replace(/\D/g, ''); 
                 setTimeout(() => {
                     window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
-                }, i * 1500);
+                }, i * 2000); 
             });
         }
 

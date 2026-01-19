@@ -26,7 +26,6 @@
         .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
         .btn-ban { background: var(--banned); color: #fff; }
         .btn-unban { background: #25d366; color: #000; }
-        .btn-extend { background: #8e44ad; color: #fff; margin-left: 5px; }
         .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3); }
         .handle-name { color: var(--accent); font-size: 1.1rem; text-decoration: none; }
     </style>
@@ -84,21 +83,20 @@
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
                 
-                // READ LOGIC: Checking every possible way the Editor sends "Paid" status
+                // THE ACTIVATION LOGIC: Check database columns AND the synced config from Editor
                 const isPro = (s.plan_type === 'pro') || 
                               (s.is_activated === true) || 
-                              (config.isActivated === true) ||
-                              (config.is_activated === true);
+                              (config.isActivated === true);
 
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
 
-                // BROADCAST FIX: Ensure WA is captured for the checkbox
+                // DATA READING FIX: Ensure the phone number is actually found for broadcast
                 const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || '';
 
                 let membershipHTML = isPro ? 
-                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>` :
+                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Paid / Unlimited</small>` :
                     `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}</small>`;
                 
                 return `
@@ -106,20 +104,15 @@
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || config.businessName || 'Unnamed Store'}</small><br>
-                        <small style="color:#555">WA: ${wa || 'No Number'}</small>
+                        <small style="color:#888">${s.name || config.businessName || 'Unnamed'}</small><br>
+                        <small style="color:#ffd700">WA: ${wa || 'NO NUMBER'}</small>
                     </td>
                     <td>${membershipHTML}</td>
-                    <td>
-                        <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
-                            ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
-                        </span>
-                    </td>
+                    <td><span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">${s.is_active ? '● ONLINE' : '● BANNED'}</span></td>
                     <td><div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div></td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
                         <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
-                        ${!isPro ? `<button class="btn-extend" style="background:#8e44ad; color:#fff; margin-left:5px;" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -136,37 +129,28 @@
 
         async function adminAction(handle, action) {
             if(!confirm(`Proceed with ${action}?`)) return;
-            try {
-                const res = await fetch(`${API}/api/admin/action`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ handle, action })
-                });
-                if(res.ok) {
-                    alert(`${action} successful`);
-                    loadAdmin();
-                } else {
-                    alert("Action failed on server.");
-                }
-            } catch (err) { alert("Network error."); }
+            await fetch(`${API}/api/admin/action`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ handle, action })
+            });
+            loadAdmin();
         }
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
             if(!msg) return alert("Message is empty!");
-            const checkboxes = Array.from(document.querySelectorAll('.store-check:checked'));
-            const selected = checkboxes.map(cb => cb.value).filter(n => n && n.length > 5);
-            
-            if(selected.length === 0) return alert("No valid store numbers selected!");
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(cb => cb.value)
+                                 .filter(n => n && n.length > 5);
+            if(selected.length === 0) return alert("No valid store numbers found!");
 
             selected.forEach((num, i) => {
-                const cleanNum = num.replace(/\D/g, ''); 
                 setTimeout(() => {
-                    window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
+                    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                 }, i * 2000); 
             });
         }
-
         loadAdmin();
     </script>
 </body>

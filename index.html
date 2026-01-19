@@ -74,7 +74,7 @@
             }
         }
 
-        function renderTable(data) {
+                function renderTable(data) {
             document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
             
@@ -83,8 +83,12 @@
                 const expiryDate = new Date(s.trial_expires);
                 const now = new Date();
                 
-                // Membership logic: Check if plan is 'pro' (7-digit code result)
-                const isPro = s.plan_type === 'pro' || s.plan_type === 'paid';
+                // SURGICAL FIX: Check plan_type OR the is_activated flag in configData
+                const isPro = s.plan_type === 'pro' || 
+                              s.plan_type === 'paid' || 
+                              s.is_activated === true || 
+                              (s.config_data && s.config_data.isActivated === true);
+
                 const diffTime = expiryDate - now;
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 const isExpired = diffDays <= 0;
@@ -107,7 +111,7 @@
                     <td><input type="checkbox" class="store-check" value="${s.owner_whatsapp}"></td>
                     <td>
                         <b class="handle-name">${s.handle}</b><br>
-                        <small style="color:#888">${s.name || 'Unnamed Store'}</small><br>
+                        <small style="color:#888">${s.name || (s.config_data && s.config_data.businessName) || 'Unnamed Store'}</small><br>
                         <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
                     </td>
                     <td>${membershipHTML}</td>

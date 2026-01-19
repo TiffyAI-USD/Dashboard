@@ -80,21 +80,23 @@
             
             tbody.innerHTML = data.map(s => {
                 const now = new Date();
-                const expiry = new Date(s.trial_expires);
-                const diffDays = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+                const createdDate = new Date(s.created_at);
                 
-                // 1. Plan Identification Logic
-                // If s.plan_type is 'pro' it means they used the 7-digit code
+                // Smart Expiry: 7 days from creation date
+                const trialEndDate = new Date(createdDate);
+                trialEndDate.setDate(createdDate.getDate() + 7);
+                
+                const diffTime = trialEndDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
                 const hasPaidFull = s.plan_type === 'pro';
                 const planBadge = hasPaidFull 
                     ? '<span class="badge badge-pro">👑 PAID IN FULL</span>' 
                     : '<span class="badge badge-trial">🧪 7-DAY TRIAL</span>';
 
-                // 2. Credits & Downloads (Defaults to 0 if null)
                 const credits = s.download_credits || 0;
                 const creditStatus = hasPaidFull ? `<span class="credits-val">${credits} Downloads left</span>` : '0 (Trial)';
 
-                // 3. Expiry Display Logic
                 let expiryDisplay;
                 let expiryColor = "#fff";
 
@@ -136,7 +138,6 @@
             }).join('');
         }
 
-        // Logic for Search, ToggleAll, Broadcast, and AdminAction remains same but uses updated fields
         function filterTable() {
             const term = document.getElementById('search').value.toLowerCase();
             const filtered = stores.filter(s => 
@@ -169,7 +170,9 @@
             if(!msg) return alert("Message empty!");
             const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(cb => cb.value);
             selected.forEach((num, i) => {
-                setTimeout(() => window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank'), i * 1200);
+                if(num && num !== 'null') {
+                    setTimeout(() => window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank'), i * 1200);
+                }
             });
         }
 

@@ -15,6 +15,8 @@
         .badge-pro { background: var(--pro); color: #000; padding: 4px 10px; border-radius: 6px; font-weight: 900; }
         .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; cursor: pointer; font-weight: bold; border: none; }
         button { cursor: pointer; border-radius: 6px; border: none; padding: 8px 16px; font-weight: 800; margin-right: 5px; }
+        .info-sub { color: #888; font-size: 0.8rem; display: block; margin-top: 4px; }
+        .cta-tag { color: #3498db; font-weight: bold; font-size: 0.75rem; }
     </style>
 </head>
 <body>
@@ -22,7 +24,7 @@
     
     <div class="broadcast-box">
         <h3>📢 WhatsApp Broadcast</h3>
-        <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
+        <textarea id="broadcastMsg" placeholder="Type message to send to selected stores..."></textarea>
         <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
 
@@ -32,7 +34,7 @@
         <thead>
             <tr>
                 <th><input type="checkbox" onclick="toggleAll(this)"></th>
-                <th>Store & Owner</th>
+                <th>Store & CTA Info</th>
                 <th>Membership</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -45,15 +47,6 @@
         let stores = [];
         const API = 'https://webstore-api-m8sr.onrender.com';
 
-        // THE EXACT LOGIC FROM YOUR EDITOR
-        function checkPaidStatus(wa, storedCode) {
-            if (!wa || !storedCode) return false;
-            const cleanWA = wa.replace(/\D/g, '');
-            // Your math: Length * 1234567, take first 7 digits
-            const generated = (cleanWA.length * 1234567).toString().substring(0, 7);
-            return storedCode === generated;
-        }
-
         async function loadAdmin() {
             try {
                 const res = await fetch(`${API}/api/admin/all-stores`);
@@ -63,16 +56,23 @@
         }
 
         function renderTable(data) {
+            document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
+            
             tbody.innerHTML = data.map(s => {
-                const config = s.configData || s.config_data || {};
+                // PARSE JSON STRING FROM RENDER DB
+                let config = {};
+                try {
+                    config = typeof s.configData === 'string' ? JSON.parse(s.configData) : (s.configData || {});
+                } catch(e) { config = {}; }
+
+                // LOGIC MATCHING YOUR EDITOR
                 const wa = s.owner_whatsapp || config.wa || "";
+                const isPaid = (s.plan_type === 'pro') || (s.is_activated === true) || (config.isActivated === true);
                 
-                // USE THE LOGIC: Check database columns OR run the math on the code
-                const isPaid = s.plan_type === 'pro' || 
-                               s.is_activated === true || 
-                               config.isActivated === true ||
-                               checkPaidStatus(wa, config.activationCode);
+                // CTA CAPTURE
+                const ctaText = config.ctaText || "None";
+                const ctaUrl = config.ctaUrl || "#";
 
                 const expiry = new Date(s.trial_expires);
                 const diff = Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24));
@@ -80,8 +80,10 @@
                 return `<tr>
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
                     <td>
-                        <b style="color:var(--accent)">${s.handle}</b><br>
-                        <small style="color:#ffd700">WA: ${wa || 'NOT FOUND'}</small>
+                        <b style="color:var(--accent); font-size: 1.1rem;">${s.handle}</b>
+                        <span class="info-sub">Biz: ${config.businessName || 'Unnamed'}</span>
+                        <span class="cta-tag">CTA: ${ctaText} → ${ctaUrl}</span>
+                        <span style="color:#ffd700; font-weight: bold; font-size:0.8rem;">WA: ${wa || 'MISSING'}</span>
                     </td>
                     <td>
                         ${isPaid ? '<span class="badge-pro">👑 PAID LICENSE</span>' : `<span style="color:#aaa">⌛ TRIAL: ${diff} Days</span>`}
@@ -99,7 +101,7 @@
         function toggleAll(m) { document.querySelectorAll('.store-check').forEach(c => c.checked = m.checked); }
 
         async function adminAction(handle, action) {
-            if(!confirm(`Confirm ${action}?`)) return;
+            if(!confirm(`Apply ${action} to ${handle}?`)) return;
             await fetch(`${API}/api/admin/action`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -110,10 +112,17 @@
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
-            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(c => c.value).filter(v => v.length > 5);
-            if(!msg || !selected.length) return alert("Select stores with numbers.");
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(c => c.value)
+                                 .filter(v => v && v.length > 5);
+            
+            if(!msg || !selected.length) return alert("Select stores with WA numbers and type a message.");
+
             selected.forEach((num, i) => {
-                setTimeout(() => { window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }, i * 2000);
+                const clean = num.replace(/\D/g, '');
+                setTimeout(() => { 
+                    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank'); 
+                }, i * 2000);
             });
         }
         loadAdmin();

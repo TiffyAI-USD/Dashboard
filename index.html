@@ -5,36 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OS Admin Panel | Global Store Manager</title>
     <style>
-        :root { --accent: #d4a373; --bg: #000; --card: #111; --pro: #ffd700; }
+        :root { 
+            --accent: #d4a373; --bg: #000; --card: #111;
+            --text: #00ff00; --banned: #ff4444; --pro: #ffd700;
+        }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; padding: 30px; margin: 0; }
-        h1 { color: var(--accent); margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
-        .broadcast-box { background: var(--card); padding: 25px; border: 1px solid #333; border-radius: 16px; margin-bottom: 30px; }
-        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 15px; border-radius: 10px; margin-top: 15px; box-sizing: border-box; }
+        h1 { color: var(--accent); margin-bottom: 30px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+        .broadcast-box { background: var(--card); padding: 25px; border: 1px solid #333; border-radius: 16px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 15px; border-radius: 10px; margin-top: 15px; box-sizing: border-box; font-family: inherit; }
         .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         #search { padding: 12px 20px; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 8px; width: 300px; }
+        #stats { font-weight: bold; color: var(--accent); letter-spacing: 1px; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; background: #0a0a0a; border-radius: 12px; overflow: hidden; border: 1px solid #222; }
         th, td { padding: 18px; text-align: left; border-bottom: 1px solid #1a1a1a; }
-        th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; }
-        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; }
+        th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; letter-spacing: 1px; }
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; margin-bottom: 5px; }
         .badge-pro { background: var(--pro); color: #000; }
         .badge-trial { background: #444; color: #fff; }
-        button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; }
+        button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; text-transform: uppercase; }
         .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
-        .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; }
+        .btn-ban { background: var(--banned); color: #fff; }
+        .btn-unban { background: #25d366; color: #000; }
+        .btn-extend { background: #8e44ad; color: #fff; margin-left: 5px; }
+        .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3); }
         .handle-name { color: var(--accent); font-size: 1.1rem; text-decoration: none; }
     </style>
 </head>
 <body>
+
     <h1>🛰️ Global Store Manager</h1>
+
     <div class="broadcast-box">
-        <h3>📢 WhatsApp Broadcast to Store Owners</h3>
+        <h3 style="margin:0;">📢 WhatsApp Broadcast to Store Owners</h3>
         <textarea id="broadcastMsg" placeholder="Type message..."></textarea>
         <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
     </div>
+
     <div class="controls">
         <div id="stats">Connecting...</div>
         <input type="text" id="search" placeholder="Search..." onkeyup="filterTable()">
     </div>
+
     <table id="storeTable">
         <thead>
             <tr>
@@ -58,37 +69,57 @@
                 const res = await fetch(`${API}/api/admin/all-stores`);
                 stores = await res.json();
                 renderTable(stores);
-            } catch (err) { document.getElementById('stats').innerText = "❌ Offline"; }
+            } catch (err) {
+                document.getElementById('stats').innerText = "❌ Satellite Offline";
+            }
         }
 
         function renderTable(data) {
             document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
             const tbody = document.getElementById('tableBody');
+            
             tbody.innerHTML = data.map(s => {
                 const config = s.configData || s.config_data || {};
-                
-                // EDITOR LOGIC APPLIED: Checks the direct flag sent by the editor
-                const isPro = s.plan_type === 'pro' || s.is_activated === true || config.isActivated === true;
-
+                const createdDate = new Date(s.created_at);
                 const expiryDate = new Date(s.trial_expires);
-                const diffDays = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+                const now = new Date();
                 
-                // BROADCAST FIX: Get WhatsApp from every possible field
-                const wa = s.owner_whatsapp || config.wa || '';
+                // READ LOGIC: Checking every possible way the Editor sends "Paid" status
+                const isPro = (s.plan_type === 'pro') || 
+                              (s.is_activated === true) || 
+                              (config.isActivated === true) ||
+                              (config.is_activated === true);
+
+                const diffTime = expiryDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const isExpired = diffDays <= 0;
+
+                // BROADCAST FIX: Ensure WA is captured for the checkbox
+                const wa = s.owner_whatsapp || config.wa || config.ownerWhatsapp || '';
 
                 let membershipHTML = isPro ? 
-                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:var(--pro);">Unlimited</small>` :
-                    `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small>${diffDays <= 0 ? 'EXPIRED' : diffDays + ' Days Left'}</small>`;
+                    `<span class="badge badge-pro">👑 PRO LICENSE</span><br><small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>` :
+                    `<span class="badge badge-trial">⌛ TRIAL MODE</span><br><small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}</small>`;
                 
-                return `<tr>
+                return `
+                <tr>
                     <td><input type="checkbox" class="store-check" value="${wa}"></td>
-                    <td><b class="handle-name">${s.handle}</b><br><small style="color:#888">${s.name || config.businessName || 'Unnamed'}</small><br><small>WA: ${wa}</small></td>
+                    <td>
+                        <b class="handle-name">${s.handle}</b><br>
+                        <small style="color:#888">${s.name || config.businessName || 'Unnamed Store'}</small><br>
+                        <small style="color:#555">WA: ${wa || 'No Number'}</small>
+                    </td>
                     <td>${membershipHTML}</td>
-                    <td><span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">● ${s.is_active ? 'ONLINE' : 'BANNED'}</span></td>
-                    <td>${new Date(s.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
+                            ${s.is_active ? '● ONLINE' : '● SUSPENDED'}
+                        </span>
+                    </td>
+                    <td><div style="font-size:0.85rem;">${createdDate.toLocaleDateString()}</div></td>
                     <td>
                         <button class="btn-view" onclick="window.open('${API}/view/${s.handle}')">VIEW</button>
-                        <button style="background:${s.is_active ? '#ff4444' : '#25d366'}; color:#fff;" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
+                        <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'ACTIVATE'}</button>
+                        ${!isPro ? `<button class="btn-extend" style="background:#8e44ad; color:#fff; margin-left:5px;" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -99,26 +130,43 @@
             renderTable(stores.filter(s => s.handle.toLowerCase().includes(term)));
         }
 
-        function toggleAll(master) { document.querySelectorAll('.store-check').forEach(cb => cb.checked = master.checked); }
+        function toggleAll(master) {
+            document.querySelectorAll('.store-check').forEach(cb => cb.checked = master.checked);
+        }
 
         async function adminAction(handle, action) {
-            if(!confirm(`Confirm ${action}?`)) return;
-            await fetch(`${API}/api/admin/action`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ handle, action })
-            });
-            loadAdmin();
+            if(!confirm(`Proceed with ${action}?`)) return;
+            try {
+                const res = await fetch(`${API}/api/admin/action`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ handle, action })
+                });
+                if(res.ok) {
+                    alert(`${action} successful`);
+                    loadAdmin();
+                } else {
+                    alert("Action failed on server.");
+                }
+            } catch (err) { alert("Network error."); }
         }
 
         function sendBroadcast() {
             const msg = document.getElementById('broadcastMsg').value;
-            const selected = Array.from(document.querySelectorAll('.store-check:checked')).map(cb => cb.value).filter(n => n.length > 5);
-            if(!msg || !selected.length) return alert("Select stores and type a message.");
+            if(!msg) return alert("Message is empty!");
+            const checkboxes = Array.from(document.querySelectorAll('.store-check:checked'));
+            const selected = checkboxes.map(cb => cb.value).filter(n => n && n.length > 5);
+            
+            if(selected.length === 0) return alert("No valid store numbers selected!");
+
             selected.forEach((num, i) => {
-                setTimeout(() => { window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank'); }, i * 2000);
+                const cleanNum = num.replace(/\D/g, ''); 
+                setTimeout(() => {
+                    window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(msg)}`, '_blank');
+                }, i * 2000); 
             });
         }
+
         loadAdmin();
     </script>
 </body>

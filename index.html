@@ -21,12 +21,13 @@
         th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; letter-spacing: 1px; }
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 900; display: inline-block; margin-bottom: 5px; }
         .badge-pro { background: var(--pro); color: #000; }
+        .badge-trial { background: #444; color: #fff; }
         .badge-banned { background: var(--banned); color: #fff; }
         button { cursor: pointer; font-weight: 800; border-radius: 6px; border: none; padding: 8px 16px; transition: 0.3s; font-size: 0.8rem; text-transform: uppercase; }
         .btn-view { background: #3498db; color: #fff; margin-right: 5px; }
         .btn-ban { background: var(--banned); color: #fff; }
         .btn-unban { background: #25d366; color: #000; }
-        .btn-extend { background: var(--pro); color: #000; margin-left: 5px; }
+        .btn-extend { background: #8e44ad; color: #fff; margin-left: 5px; }
         .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3); }
         .handle-name { color: var(--accent); font-size: 1.1rem; text-decoration: none; }
     </style>
@@ -62,6 +63,7 @@
 
     <script>
         let stores = [];
+        // Updated to use the Render link provided in your dashboard code
         const API = 'https://webstore-api-m8sr.onrender.com';
 
         async function loadAdmin() {
@@ -80,9 +82,29 @@
             
             tbody.innerHTML = data.map(s => {
                 const createdDate = new Date(s.created_at);
+                const expiryDate = new Date(s.trial_expires);
+                const now = new Date();
                 
-                // If plan is 'pro' or was created via new server, it's Unlimited.
+                // Identify Membership Status
                 const isPro = s.plan_type === 'pro' || s.plan_type === 'paid';
+                
+                // Calculate Trial Days Remaining
+                const diffTime = expiryDate - now;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const isExpired = diffDays <= 0;
+
+                let membershipHTML = "";
+                if (isPro) {
+                    membershipHTML = `
+                        <span class="badge badge-pro">👑 PRO LICENSE</span><br>
+                        <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>`;
+                } else {
+                    membershipHTML = `
+                        <span class="badge badge-trial">⌛ TRIAL MODE</span><br>
+                        <small style="color:${isExpired ? 'red' : '#aaa'}; font-weight:bold;">
+                            ${isExpired ? 'EXPIRED' : diffDays + ' Days Remaining'}
+                        </small>`;
+                }
                 
                 return `
                 <tr>
@@ -93,8 +115,7 @@
                         <small style="color:#555">WA: ${s.owner_whatsapp || 'No Number'}</small>
                     </td>
                     <td>
-                        <span class="badge badge-pro">👑 PRO LICENSE</span><br>
-                        <small style="color:#ffd700; font-weight:bold;">Unlimited Access</small>
+                        ${membershipHTML}
                     </td>
                     <td>
                         <span style="color:${s.is_active ? '#00ff00' : 'red'}; font-weight:bold;">
@@ -110,6 +131,7 @@
                         <button class="${s.is_active ? 'btn-ban' : 'btn-unban'}" onclick="adminAction('${s.handle}', 'toggle')">
                             ${s.is_active ? 'BAN' : 'ACTIVATE'}
                         </button>
+                        ${!isPro ? `<button class="btn-extend" onclick="adminAction('${s.handle}', 'extend')">EXTEND</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -150,7 +172,6 @@
 
             selected.forEach((num, i) => {
                 if(num && num !== 'null' && num !== 'undefined') {
-                    // Staggered opening to prevent browser blocking popups
                     setTimeout(() => window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank'), i * 1500);
                 }
             });

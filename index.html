@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OS Admin Panel | Global Store Manager</title>
+    <style>
+        :root { --accent: #d4a373; --bg: #000; --card: #111; --pro: #ffd700; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #fff; padding: 30px; margin: 0; }
+        h1 { color: var(--accent); text-transform: uppercase; letter-spacing: 2px; font-weight: 800; }
+        .broadcast-box { background: var(--card); padding: 25px; border: 1px solid #333; border-radius: 16px; margin-bottom: 30px; border: 1px solid #444; }
+        textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; padding: 15px; border-radius: 10px; margin-top: 15px; box-sizing: border-box; font-family: inherit; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; background: #0a0a0a; border-radius: 12px; overflow: hidden; border: 1px solid #222; }
+        th, td { padding: 18px; text-align: left; border-bottom: 1px solid #1a1a1a; }
+        th { background: #151515; text-transform: uppercase; font-size: 0.75rem; color: #888; }
+        .badge-pro { background: var(--pro); color: #000; padding: 4px 10px; border-radius: 6px; font-weight: 900; font-size: 0.75rem; }
+        .btn-broadcast { background: #25d366; color: white; margin-top: 15px; padding: 12px 30px; border-radius: 50px; cursor: pointer; font-weight: bold; border: none; text-transform: uppercase; }
+        button { cursor: pointer; border-radius: 6px; border: none; padding: 8px 16px; font-weight: 800; margin-right: 5px; transition: 0.2s; }
+        .info-sub { color: #888; font-size: 0.8rem; display: block; margin-top: 4px; }
+        .cta-tag { color: #3498db; font-weight: bold; font-size: 0.75rem; display: block; margin-top: 4px; }
+        .wa-display { color: #ffd700; font-weight: bold; font-size: 0.85rem; font-family: monospace; display: block; margin-top: 4px; }
+        .ip-tag { color: #ff4444; font-size: 0.7rem; font-family: monospace; background: rgba(255,68,68,0.1); padding: 2px 5px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🛰️ Global Store Manager</h1>
+    
+    <div class="broadcast-box">
+        <h3>📢 WhatsApp Broadcast</h3>
+        <p style="font-size: 0.8rem; color: #666; margin-top: -10px;">Select stores below to blast a message to owners.</p>
+        <textarea id="broadcastMsg" placeholder="Type message to send to selected stores..."></textarea>
+        <button class="btn-broadcast" onclick="sendBroadcast()">🚀 Send to Selected</button>
+    </div>
+
+    <div id="stats" style="color:var(--accent); margin-bottom: 15px; font-weight: bold;">Syncing Nodes...</div>
+
+    <table id="storeTable">
+        <thead>
+            <tr>
+                <th width="40"><input type="checkbox" id="masterCheck" onclick="toggleAll(this)"></th>
+                <th>Store & CTA Info</th>
+                <th>Membership / Created</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        let stores = [];
+        const API = 'https://webstore-api-m8sr.onrender.com';
+
+        async function loadAdmin() {
+            try {
+                const res = await fetch(`${API}/api/admin/all-stores`);
+                stores = await res.json();
+                renderTable(stores);
+            } catch (err) { 
+                document.getElementById('stats').innerText = "❌ SERVER OFFLINE"; 
+                console.error(err);
+            }
+        }
+
+        function renderTable(data) {
+            document.getElementById('stats').innerText = `Active Nodes: ${data.length}`;
+            const tbody = document.getElementById('tableBody');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#555;">No stores found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(s => {
+                let config = s.config_data || {};
+                const wa = s.owner_whatsapp || config.wa || "";
+                const isPaid = s.plan_type === 'pro';
+                
+                // FIXED CTA LOGIC
+                const ctaText = config.ctaText || "None";
+                const ctaUrl = config.ctaUrl || "#";
+
+                // Date Formatting
+                const createdDate = new Date(s.created_at).toLocaleDateString('en-ZA');
+                const expiry = new Date(s.trial_expires);
+                const diff = Math.ceil((expiry - new Date()) / (1000 * 60 * 60 * 24));
+                const trialStatus = diff > 0 ? `${diff} Days Left` : "EXPIRED";
+
+                return `<tr>
+                    <td><input type="checkbox" class="store-check" value="${wa}"></td>
+                    <td>
+                        <b style="color:var(--accent); font-size: 1.1rem;">${s.handle}</b>
+                        <span class="info-sub">Biz Name: ${config.businessName || 'Unnamed Store'}</span>
+                        <span class="cta-tag">🔗 CTA: ${ctaText} → ${ctaUrl}</span>
+                        <span class="wa-display">📞 WA: ${wa || '<span style="color:red">MISSING</span>'}</span>
+                        <span class="ip-tag">📍 IP: ${s.client_ip || 'Unknown'}</span>
+                    </td>
+                    <td>
+                        ${isPaid ? '<span class="badge-pro">👑 PAID LICENSE</span>' : `<span style="color:#aaa; font-weight:bold; font-size:0.8rem;">⌛ TRIAL: ${trialStatus}</span>`}
+                        <div style="font-size:0.7rem; color:#555; margin-top:10px;">Created: ${createdDate}</div>
+                    </td>
+                    <td>
+                        <b style="color:${s.is_active ? '#00ff00' : '#ff4444'}">
+                            ${s.is_active ? '● ONLINE' : '● BANNED'}
+                        </b>
+                    </td>
+                    <td>
+                        <button style="background:#3498db; color:#fff" onclick="window.open('${API}/view/${s.handle}', '_blank')">VIEW</button>
+                        <button style="background:#444; color:#fff" onclick="adminAction('${s.handle}', 'toggle')">${s.is_active ? 'BAN' : 'UNBAN'}</button>
+                        ${!isPaid ? `<button style="background:#8e44ad; color:#fff" onclick="adminAction('${s.handle}', 'extend')">+30D</button>` : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function toggleAll(m) { 
+            document.querySelectorAll('.store-check').forEach(c => c.checked = m.checked); 
+        }
+
+        async function adminAction(handle, action) {
+            if(!confirm(`Confirm ${action} for store: ${handle}?`)) return;
+            try {
+                const res = await fetch(`${API}/api/admin/action`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ handle, action })
+                });
+                if(res.ok) loadAdmin();
+            } catch (err) {
+                alert("Action failed.");
+            }
+        }
+
+        function sendBroadcast() {
+            const msg = document.getElementById('broadcastMsg').value.trim();
+            const selected = Array.from(document.querySelectorAll('.store-check:checked'))
+                                 .map(c => c.value)
+                                 .filter(v => v && v.length > 5);
+            
+            if(!msg) return alert("Please type a message.");
+            if(!selected.length) return alert("Select at least one store.");
+
+            selected.forEach((num, i) => {
+                const clean = num.replace(/\D/g, '');
+                setTimeout(() => { 
+                    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank'); 
+                }, i * 1800);
+            });
+        }
+
+        loadAdmin();
+        setInterval(loadAdmin, 120000);
+    </script>
+</body>
+</html>
